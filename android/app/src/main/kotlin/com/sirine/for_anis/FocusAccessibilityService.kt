@@ -23,6 +23,12 @@ class FocusAccessibilityService : AccessibilityService() {
     private var lastBlockedPackage: String? = null
     private var lastActionAt: Long = 0
 
+    private var cachedLaunchers: Set<String>? = null
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val contentCheck = Runnable {
+        if (SessionStore.isActive(this) && isEscapeScreen()) bounceHome()
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
@@ -41,7 +47,7 @@ class FocusAccessibilityService : AccessibilityService() {
         if (pkg == packageName) return
 
         // Safety: never block the launcher or the dialer.
-        if (pkg == defaultLauncher() || pkg == defaultDialer() || isSafePackage(pkg)) {
+        if (launcherPackages().contains(pkg) || pkg == defaultDialer() || isSafePackage(pkg)) {
             return
         }
 
@@ -87,7 +93,7 @@ class FocusAccessibilityService : AccessibilityService() {
 
         if (isInstaller) {
             // An uninstall flow — if it mentions our app, bounce out.
-            if (windowMentionsUs(event)) bounceHome()
+            if (windowMentionsUs(event)) bounceHome() else scheduleContentCheck()
             return
         }
 
@@ -99,16 +105,45 @@ class FocusAccessibilityService : AccessibilityService() {
                 lowerClass.contains("installedappdetails") ||
                 lowerClass.contains("appinfodashboard") ||
                 lowerClass.contains("applicationdetails")
-            val text = windowText(event).lowercase()
-            val guardedText = (text.contains("device admin") ||
-                text.contains("accessibility") ||
-                text.contains("date & time") ||
-                text.contains("uninstall") ||
-                text.contains("app info") ||
-                text.contains("force stop")) &&
-                (text.contains("for anis") || guardedClass)
-            if (guardedClass || guardedText) bounceHome()
+            if (guardedClass) {
+                bounceHome()
+                return
+            }
+            // Modern Settings is Compose-based: the class name is generic and
+            // the content arrives after the window event, so re-scan the live
+            // window shortly afterwards.
+            scheduleContentCheck()
         }
+    }
+
+    /** Re-reads the foreground window a moment later and bounces if it's an escape screen. */
+    private fun scheduleContentCheck() {
+        handler.removeCallbacks(contentCheck)
+        handler.postDelayed(contentCheck, 350)
+        handler.postDelayed(contentCheck, 900)
+    }
+
+    private fun isEscapeScreen(): Boolean {
+        val text = currentWindowText().lowercase()
+        if (text.isEmpty()) return false
+        val mentionsUs = text.contains("for anis") || text.contains(packageName)
+        // This app's App Info / uninstall / device-admin detail screen.
+        if (mentionsUs && (text.contains("uninstall") ||
+                text.contains("force stop") ||
+                text.contains("deactivate") ||
+                text.contains("turn off this device admin"))
+        ) return true
+        // The device admin list and the accessibility list (which names us).
+        if (text.contains("device admin apps")) return true
+        if (mentionsUs && text.contains("installed apps") &&
+            text.contains("accessibility")
+        ) return true
+        // Date & time, which could be used to fiddle with the clock.
+        if (text.contains("set time automatically") ||
+            text.contains("set date and time") ||
+            text.contains("date & time")
+        ) return true
+        return false
     }
 
     private fun bounceHome() {
@@ -133,13 +168,27 @@ class FocusAccessibilityService : AccessibilityService() {
             pkg == "com.android.emergency"
     }
 
-    private fun defaultLauncher(): String? {
-        return try {
+    /**
+     * Real home-screen packages.
+     *
+     * Note: `com.android.settings` also declares a HOME activity (FallbackHome,
+     * used during boot), so resolving the home intent naively would whitelist
+     * the whole Settings app and disable the anti-escape guard. The system
+     * resolver ("android") is excluded for the same reason.
+     */
+    private fun launcherPackages(): Set<String> {
+        cachedLaunchers?.let { return it }
+        val found = try {
             val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            packageManager.resolveActivity(intent, 0)?.activityInfo?.packageName
+            packageManager.queryIntentActivities(intent, 0)
+                .map { it.activityInfo.packageName }
+                .filter { it != "com.android.settings" && it != "android" }
+                .toSet()
         } catch (_: Throwable) {
-            null
+            emptySet()
         }
+        cachedLaunchers = found
+        return found
     }
 
     private fun defaultDialer(): String? {
@@ -152,19 +201,37 @@ class FocusAccessibilityService : AccessibilityService() {
     }
 
     private fun windowMentionsUs(event: AccessibilityEvent): Boolean {
-        val text = windowText(event).lowercase()
+        val text = (currentWindowText() + ' ' + windowText(event)).lowercase()
         return text.contains("for anis") || text.contains(packageName)
     }
 
     private fun windowText(event: AccessibilityEvent): String {
-        val node = rootInActiveWindow ?: event.source ?: return ""
+        val node = event.source ?: return ""
         val sb = StringBuilder()
         collectText(node, sb, 0)
         return sb.toString()
     }
 
+    /**
+     * Text of every node in the active window. Settings screens are Compose
+     * based and nest deeply, so the depth limit is generous.
+     */
+    private fun currentWindowText(): String {
+        val sb = StringBuilder()
+        try {
+            rootInActiveWindow?.let { collectText(it, sb, 0) }
+            for (w in windows) {
+                w.root?.let { collectText(it, sb, 0) }
+                if (sb.length > 8000) break
+            }
+        } catch (_: Throwable) {
+            // Window went away mid-scan; whatever we collected is fine.
+        }
+        return sb.toString()
+    }
+
     private fun collectText(node: AccessibilityNodeInfo?, sb: StringBuilder, depth: Int) {
-        if (node == null || depth > 12) return
+        if (node == null || depth > 40 || sb.length > 8000) return
         node.text?.let { sb.append(it).append(' ') }
         node.contentDescription?.let { sb.append(it).append(' ') }
         for (i in 0 until node.childCount) {
@@ -173,6 +240,7 @@ class FocusAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+
         fun componentName(ctx: android.content.Context): ComponentName =
             ComponentName(ctx, FocusAccessibilityService::class.java)
     }
