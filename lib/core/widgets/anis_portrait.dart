@@ -1,16 +1,53 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 import '../theme/app_colors.dart';
-import 'heart_logo.dart';
+import 'study_avatar.dart';
 
-/// A soft circular portrait of Anis for the home screen.
+/// The face of the home screen.
 ///
-/// Shows `assets/anis.jpg` if it's there — drop in his photo, or any cute
-/// cartoon you'd rather use, at that path and it appears automatically. If the
-/// file is missing the heart logo is shown instead, so the app always looks
-/// finished.
-class AnisPortrait extends StatelessWidget {
+/// If `assets/anis.jpg` exists it's shown as a soft circular portrait with a
+/// rose ring — drop in his photo, or any picture you'd rather use, at that
+/// path. Otherwise the drawn doctor-studying avatar is shown, which already
+/// comes with its own backdrop and so isn't cropped into a circle.
+class AnisPortrait extends StatefulWidget {
   const AnisPortrait({super.key, this.size = 170, this.asset = 'assets/anis.jpg'});
+
+  final double size;
+  final String asset;
+
+  @override
+  State<AnisPortrait> createState() => _AnisPortraitState();
+}
+
+class _AnisPortraitState extends State<AnisPortrait> {
+  late final Future<bool> _hasPhoto = _lookForPhoto();
+
+  Future<bool> _lookForPhoto() async {
+    try {
+      await rootBundle.load(widget.asset);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _hasPhoto,
+      builder: (context, snapshot) {
+        if (snapshot.data != true) {
+          return StudyAvatar(size: widget.size);
+        }
+        return _CircularPhoto(size: widget.size, asset: widget.asset);
+      },
+    );
+  }
+}
+
+class _CircularPhoto extends StatelessWidget {
+  const _CircularPhoto({required this.size, required this.asset});
 
   final double size;
   final String asset;
@@ -29,7 +66,8 @@ class AnisPortrait extends StatelessWidget {
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: scheme.primary.withValues(alpha: 0.55), width: 3),
+              border:
+                  Border.all(color: scheme.primary.withValues(alpha: 0.55), width: 3),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.rose.withValues(alpha: 0.25),
@@ -38,17 +76,7 @@ class AnisPortrait extends StatelessWidget {
                 ),
               ],
             ),
-            child: ClipOval(
-              child: Image.asset(
-                asset,
-                fit: BoxFit.cover,
-                // No photo yet? Fall back to the heart mark.
-                errorBuilder: (context, error, stack) => ColoredBox(
-                  color: scheme.surface,
-                  child: Center(child: HeartLogo(size: size * 0.62)),
-                ),
-              ),
-            ),
+            child: ClipOval(child: Image.asset(asset, fit: BoxFit.cover)),
           ),
           Positioned(
             right: 2,

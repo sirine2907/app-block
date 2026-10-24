@@ -50,7 +50,7 @@ class HomePage extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                const AnisPortrait(size: 170),
+                const AnisPortrait(size: 200),
                 const SizedBox(height: 24),
                 Text(
                   Greeting.now(),
