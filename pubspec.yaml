@@ -1,0 +1,50 @@
+name: for_anis
+description: "A focus app made with love for Anis."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.8
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_bloc: ^8.1.6
+  bloc: ^8.1.4
+  equatable: ^2.0.5
+
+  # Dependency injection
+  get_it: ^7.7.0
+
+  # Functional error handling
+  dartz: ^0.10.1
+
+  # Persistence
+  shared_preferences: ^2.3.2
+
+  # Fonts & styling
+  google_fonts: ^6.2.1
+
+  # Utilities
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  bloc_test: ^9.1.7
+  mocktail: ^1.0.4
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/love_notes.json
+    - assets/icon/
