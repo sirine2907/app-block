@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">For Anis</string>
+    <string name="accessibility_description">For Anis uses this to notice when a blocked app opens during a focus session and gently send you back. It only reads which app is on screen while a session is active — never what you type.</string>
+    <string name="device_admin_description">Helps keep a focus session going by making For Anis harder to remove until your session finishes.</string>
+</resources>

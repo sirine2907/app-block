@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="3.1"
+        android:scaleY="3.1"
+        android:translateX="16.8"
+        android:translateY="20">
+        <!-- Heart body (cream) -->
+        <path
+            android:fillColor="#FFF7F3"
+            android:pathData="M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z" />
+        <!-- Keyhole, same colour as the background to read as a cutout -->
+        <path
+            android:fillColor="#C96A86"
+            android:pathData="M12,8 m-1.5,0 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" />
+        <path
+            android:fillColor="#C96A86"
+            android:pathData="M11.3,8.6 h1.4 l-0.35,3.2 h-0.7 z" />
+    </group>
+</vector>

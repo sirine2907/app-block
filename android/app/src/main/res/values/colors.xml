@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Blush background for the native block screen (light). -->
+    <color name="block_background">#FBE9EC</color>
+    <color name="block_text">#5A1E30</color>
+    <color name="block_accent">#C96A86</color>
+    <!-- Adaptive launcher icon background (dusty rose). -->
+    <color name="ic_launcher_background">#C96A86</color>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Romantic launch splash: blush background with a centered heart. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/block_background" />
+    <item android:gravity="center" android:drawable="@drawable/splash_heart" />
+</layer-list>
