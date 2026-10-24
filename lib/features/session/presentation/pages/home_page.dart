@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/utils/greeting.dart';
 import '../../../../core/widgets/gradient_background.dart';
-import '../../../../core/widgets/heart_logo.dart';
+import '../../../../core/widgets/anis_portrait.dart';
 import '../../../../injection_container.dart';
 import '../../../apps/presentation/bloc/apps_bloc.dart';
 import '../../../apps/presentation/pages/app_picker_page.dart';
@@ -50,8 +50,8 @@ class HomePage extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                const HeartLogo(size: 120),
-                const SizedBox(height: 28),
+                const AnisPortrait(size: 170),
+                const SizedBox(height: 24),
                 Text(
                   Greeting.now(),
                   textAlign: TextAlign.center,
