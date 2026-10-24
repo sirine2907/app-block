@@ -49,9 +49,12 @@ with little notes from me.
 - **Uncancellable sessions** — pick a duration (15 minutes to 8 hours) and
   confirm. After that there is no cancel button anywhere; the session simply has
   to run its course.
-- **Real blocking** — a native Accessibility Service notices when a blocked app
-  opens and immediately shows a full-screen block screen (with a love note and
-  the time left), then sends Anis home.
+- **Real blocking, in two layers** — a native Accessibility Service notices the
+  instant a blocked app comes to the front and shows a full-screen block screen
+  (with a love note and the time left), then sends Anis home. Behind it, the
+  foreground service also polls the current app via Usage Access every second,
+  so a blocked app is still caught even if it was already on screen or the
+  accessibility service gets switched off.
 - **Anti-escape guard** — during a session it bounces out of this app's App Info
   page, Device Admin, Accessibility and Date & Time settings, and uninstall
   dialogs for this app.
@@ -213,6 +216,12 @@ android/app/src/main/kotlin/com/sirine/for_anis/
 
 This raises the cost of giving up; it isn't unbreakable, and that's okay.
 
+- **App updates** — Android turns the Accessibility Service off whenever the app
+  is updated. Blocking keeps working through the Usage Access fallback, but it
+  reacts a second slower, so the active-session screen warns you and offers a
+  one-tap way to turn it back on. (On Android 13+, a sideloaded app may also
+  need "Allow restricted settings" from its App Info page before the
+  accessibility toggle can be switched on.)
 - **Safe Mode** boots Android without third-party apps, so the accessibility
   service won't run until you leave Safe Mode.
 - **Factory reset** wipes everything, including this app and any active session.

@@ -6,6 +6,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/widgets/countdown_ring.dart';
 import '../../../../core/widgets/gradient_background.dart';
 import '../../../../core/widgets/love_note_card.dart';
+import '../../../../injection_container.dart';
+import '../../../permissions/domain/permission.dart';
+import '../../../permissions/domain/permissions_repository.dart';
 import '../bloc/session_bloc.dart';
 
 /// The active-session screen. There is intentionally no way to stop a session
@@ -17,21 +20,42 @@ class ActiveSessionPage extends StatefulWidget {
   State<ActiveSessionPage> createState() => _ActiveSessionPageState();
 }
 
-class _ActiveSessionPageState extends State<ActiveSessionPage> {
+class _ActiveSessionPageState extends State<ActiveSessionPage>
+    with WidgetsBindingObserver {
   Timer? _noteTimer;
+  bool _accessibilityOff = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Rotate the love note every few minutes.
     _noteTimer = Timer.periodic(
       const Duration(minutes: 3),
       (_) => context.read<SessionBloc>().add(const SessionNoteRotated()),
     );
+    _checkAccessibility();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkAccessibility();
+  }
+
+  /// Blocking relies on the Accessibility Service, which Android disables when
+  /// the app is updated. If it's off, warn loudly so a session isn't silently
+  /// unprotected.
+  Future<void> _checkAccessibility() async {
+    final statuses = await sl<PermissionsRepository>().checkAll();
+    final acc = statuses
+        .firstWhere((s) => s.type == PermissionType.accessibility)
+        .granted;
+    if (mounted) setState(() => _accessibilityOff = !acc);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _noteTimer?.cancel();
     super.dispose();
   }
@@ -56,6 +80,13 @@ class _ActiveSessionPageState extends State<ActiveSessionPage> {
                         'Stay with it. I\'m right here.',
                         style: theme.textTheme.bodyMedium,
                       ),
+                      if (_accessibilityOff) ...[
+                        const SizedBox(height: 16),
+                        _AccessibilityWarning(onFix: () async {
+                          await sl<PermissionsRepository>()
+                              .request(PermissionType.accessibility);
+                        }),
+                      ],
                       const SizedBox(height: 28),
                       CountdownRing(
                         remaining: state.remaining,
@@ -87,6 +118,51 @@ class _ActiveSessionPageState extends State<ActiveSessionPage> {
               },
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown during a session if the Accessibility Service has been turned off,
+/// since blocking can't work without it.
+class _AccessibilityWarning extends StatelessWidget {
+  const _AccessibilityWarning({required this.onFix});
+
+  final Future<void> Function() onFix;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.secondary.withValues(alpha: 0.12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded,
+                    color: Color(0xFF9A6A00)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'The Accessibility Service is off, so blocking is slower '
+                    'to react. Turn it back on for instant blocking.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onFix,
+                child: const Text('Turn it back on'),
+              ),
+            ),
+          ],
         ),
       ),
     );

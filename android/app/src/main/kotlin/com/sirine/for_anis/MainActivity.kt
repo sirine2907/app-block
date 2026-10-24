@@ -81,6 +81,15 @@ class MainActivity : FlutterActivity() {
         EventChannel(messenger, eventChannelName).setStreamHandler(FocusEventBridge)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Self-heal: if a session is active but the foreground service isn't
+        // running (e.g. it was killed by the OS or an app update), bring it back.
+        if (SessionStore.isActive(this)) {
+            FocusForegroundService.start(this)
+        }
+    }
+
     // --- Permissions ---
 
     private fun checkPermissions(): Map<String, Boolean> {

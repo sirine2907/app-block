@@ -5,12 +5,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 
 /**
@@ -22,6 +25,8 @@ class FocusForegroundService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var ticker: Runnable
+    private var lastEnforcedPackage: String? = null
+    private var lastEnforcedAt: Long = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -58,7 +63,64 @@ class FocusForegroundService : Service() {
         SessionStore.checkpoint(this)
         notificationManager().notify(NOTIFICATION_ID, buildNotification(remaining))
         FocusEventBridge.emit(this)
+        enforceForegroundApp()
         scheduleTick()
+    }
+
+    /**
+     * Second line of defence behind the accessibility service.
+     *
+     * The accessibility service only fires on window *changes*, so a blocked
+     * app that is already on screen when blocking begins (after a reboot, or
+     * when the service is re-enabled mid-session) would otherwise slip through.
+     * Here we poll the current foreground app via Usage Access each tick and
+     * block it regardless of how it got there.
+     */
+    private fun enforceForegroundApp() {
+        val pkg = currentForegroundPackage() ?: return
+        if (pkg == packageName) return
+        if (!SessionStore.isBlocked(this, pkg)) return
+
+        val now = SystemClock.elapsedRealtime()
+        if (pkg == lastEnforcedPackage && now - lastEnforcedAt < 1500) return
+        lastEnforcedPackage = pkg
+        lastEnforcedAt = now
+
+        val intent = Intent(this, BlockActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION
+            )
+            putExtra(BlockActivity.EXTRA_PACKAGE, pkg)
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Throwable) {
+            // Background activity starts need the overlay permission; if it's
+            // missing the accessibility service still covers app switches.
+        }
+    }
+
+    /** The package currently in the foreground, via Usage Access. */
+    private fun currentForegroundPackage(): String? {
+        return try {
+            val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val end = System.currentTimeMillis()
+            val events = usm.queryEvents(end - 10_000, end)
+            var pkg: String? = null
+            val event = UsageEvents.Event()
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+                    pkg = event.packageName
+                }
+            }
+            pkg
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private fun onComplete() {
