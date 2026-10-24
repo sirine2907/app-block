@@ -24,6 +24,7 @@ class _ActiveSessionPageState extends State<ActiveSessionPage>
     with WidgetsBindingObserver {
   Timer? _noteTimer;
   bool _accessibilityOff = false;
+  bool _fallbackOff = false;
 
   @override
   void initState() {
@@ -42,15 +43,22 @@ class _ActiveSessionPageState extends State<ActiveSessionPage>
     if (state == AppLifecycleState.resumed) _checkAccessibility();
   }
 
-  /// Blocking relies on the Accessibility Service, which Android disables when
-  /// the app is updated. If it's off, warn loudly so a session isn't silently
-  /// unprotected.
+  /// Blocking has two layers: the Accessibility Service (instant) and the
+  /// Usage Access poll (about a second behind). Android disables the
+  /// accessibility service whenever the app is updated, so check both and warn
+  /// accordingly — loudest when neither is available.
   Future<void> _checkAccessibility() async {
     final statuses = await sl<PermissionsRepository>().checkAll();
-    final acc = statuses
-        .firstWhere((s) => s.type == PermissionType.accessibility)
-        .granted;
-    if (mounted) setState(() => _accessibilityOff = !acc);
+    bool granted(PermissionType type) =>
+        statuses.firstWhere((s) => s.type == type).granted;
+    final accessibility = granted(PermissionType.accessibility);
+    final usage = granted(PermissionType.usageAccess);
+    if (mounted) {
+      setState(() {
+        _accessibilityOff = !accessibility;
+        _fallbackOff = !usage;
+      });
+    }
   }
 
   @override
@@ -82,10 +90,17 @@ class _ActiveSessionPageState extends State<ActiveSessionPage>
                       ),
                       if (_accessibilityOff) ...[
                         const SizedBox(height: 16),
-                        _AccessibilityWarning(onFix: () async {
-                          await sl<PermissionsRepository>()
-                              .request(PermissionType.accessibility);
-                        }),
+                        _AccessibilityWarning(
+                          // Both layers down means nothing is being blocked.
+                          severe: _fallbackOff,
+                          onFix: () async {
+                            await sl<PermissionsRepository>().request(
+                              _fallbackOff
+                                  ? PermissionType.usageAccess
+                                  : PermissionType.accessibility,
+                            );
+                          },
+                        ),
                       ],
                       const SizedBox(height: 28),
                       CountdownRing(
@@ -127,28 +142,41 @@ class _ActiveSessionPageState extends State<ActiveSessionPage>
 /// Shown during a session if the Accessibility Service has been turned off,
 /// since blocking can't work without it.
 class _AccessibilityWarning extends StatelessWidget {
-  const _AccessibilityWarning({required this.onFix});
+  const _AccessibilityWarning({required this.onFix, required this.severe});
 
   final Future<void> Function() onFix;
+
+  /// True when the Usage Access fallback is also unavailable, i.e. nothing is
+  /// being blocked at all.
+  final bool severe;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
-      color: theme.colorScheme.secondary.withValues(alpha: 0.12),
+      color: severe
+          ? const Color(0xFFB3261E).withValues(alpha: 0.12)
+          : theme.colorScheme.secondary.withValues(alpha: 0.12),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Row(
               children: [
-                const Icon(Icons.warning_amber_rounded,
-                    color: Color(0xFF9A6A00)),
+                Icon(Icons.warning_amber_rounded,
+                    color: severe
+                        ? const Color(0xFFB3261E)
+                        : const Color(0xFF9A6A00)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'The Accessibility Service is off, so blocking is slower '
-                    'to react. Turn it back on for instant blocking.',
+                    severe
+                        ? 'Your apps are not being blocked right now — the '
+                            'permissions that do the blocking have been turned '
+                            'off. Tap below to restore them.'
+                        : 'The Accessibility Service is off, so blocking is '
+                            'slower to react. Turn it back on for instant '
+                            'blocking.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
@@ -159,7 +187,7 @@ class _AccessibilityWarning extends StatelessWidget {
               width: double.infinity,
               child: OutlinedButton(
                 onPressed: onFix,
-                child: const Text('Turn it back on'),
+                child: Text(severe ? 'Restore blocking' : 'Turn it back on'),
               ),
             ),
           ],
