@@ -1,6 +1,6 @@
 # For Anis 💗
 
-A focus app made with love for Anis.
+A focus app made with love for my boyfriend.
 
 It blocks the apps that pull him away so he can study and get things done. Once
 a session starts, there's no cancelling, no ending it early, and no
